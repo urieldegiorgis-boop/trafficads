@@ -50,6 +50,7 @@ select{background:var(--bg2);border:1px solid var(--border2);color:#0f1220;paddi
 .kpi-row{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
 .kpi{border-radius:16px;padding:16px 14px;text-align:center;border:1.5px solid;transition:transform .15s}
 .kpi:hover{transform:translateY(-2px)}
+.kpi.kactive{box-shadow:0 0 0 3px var(--accent);transform:translateY(-2px)}
 .kpi.c-purple{background:#e7def5;border-color:#cbb8ec}
 .kpi.c-green{background:#cfeed9;border-color:#a4dab6}
 .kpi.c-blue{background:#d2ddf6;border-color:#aac1ef}
@@ -181,7 +182,7 @@ select{background:var(--bg2);border:1px solid var(--border2);color:#0f1220;paddi
         <button class="btn btn-primary" id="syncBtn">↻ Sincronizar Close</button>
       </div>
     </div>
-    <div class="kpi-row" id="leadKpis" style="grid-template-columns:repeat(4,1fr)"></div>
+    <div class="kpi-row" id="leadKpis" style="grid-template-columns:repeat(5,1fr)"></div>
     <div class="card">
       <div class="card-head">
         <span class="card-title">Leads sincronizados desde Close</span>
@@ -189,7 +190,7 @@ select{background:var(--bg2);border:1px solid var(--border2);color:#0f1220;paddi
       </div>
       <div class="tbl-wrap">
         <table class="tbl leads">
-          <thead><tr><th>Lead / Empresa</th><th>Email</th><th>Estado</th><th>Call date</th></tr></thead>
+          <thead><tr><th>Lead / Empresa</th><th>Email</th><th>Estado</th><th id="lhCall" style="cursor:pointer">Call date <span id="lcArrow">▲</span></th></tr></thead>
           <tbody id="leadRows"></tbody>
         </table>
       </div>
@@ -239,7 +240,15 @@ const KEY='lathos_vsl';
 const INPUTS=['adspend','impr','reach','clicks','leads','mql','llamadas'];
 const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 let DB={version:4,weeks:{},leads:[],leadsMeta:null,callsAuto:true,view:{mode:'month',from:null,to:null}}, mem=null, booting=true;
-let cur=new Date(2026,5,1), curTab='vsl', leadFilter='ALL';
+let cur=new Date(2026,5,1), curTab='vsl', leadFilter='ALL', leadSort='asc';
+// Buckets de estado para las tarjetas (% sobre el total de leads) y el filtro al hacer clic
+const LBUCKETS={
+  reserva:{label:'Nueva reserva', re:/nueva|reserva|new\b/i,            c:'c-blue'},
+  cancel: {label:'Cancel',        re:/cancel/i,                          c:'c-pink'},
+  noshow: {label:'No show',       re:/no.?show/i,                        c:'c-yellow'},
+  cierre: {label:'Cierre',        re:/cierre|won|close the deal|deal|ganad|client|cobr|venta/i, c:'c-green'}
+};
+function bucketOf(st){const s=st||''; for(const k in LBUCKETS){if(LBUCKETS[k].re.test(s))return k;} return null;}
 
 /* ---------- persistencia (mismo patrón que el panel de rendimiento) ---------- */
 async function load(){
@@ -393,23 +402,52 @@ function pillClass(st){const s=(st||'').toLowerCase();
 function fmtDate(s){if(!s)return '—';const d=new Date(s);return isNaN(d)?esc(s):d.toLocaleDateString('es-ES',{day:'2-digit',month:'short',year:'2-digit'});}
 function renderLeads(){
   const all=DB.leads||[];
+  const total=all.length;
+  // dropdown de estados exactos (no pisa el filtro por tarjeta)
   const statuses=[...new Set(all.map(l=>l.status).filter(Boolean))].sort();
-  const sel=document.getElementById('lStatus');const prev=sel.value;
+  const sel=document.getElementById('lStatus');
   sel.innerHTML='<option value="ALL">Todos</option>'+statuses.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
-  sel.value=(statuses.includes(prev)||prev==='ALL')?prev:'ALL';leadFilter=sel.value;
-  const rows=all.filter(l=>leadFilter==='ALL'||l.status===leadFilter);
+  sel.value=(leadFilter!=='ALL'&&statuses.includes(leadFilter))?leadFilter:'ALL';
+
+  // filtrado: ALL · bucket (tarjeta) · estado exacto (dropdown)
+  let rows=all.filter(l=>{
+    if(leadFilter==='ALL')return true;
+    if(LBUCKETS[leadFilter])return LBUCKETS[leadFilter].re.test(l.status||'');
+    return l.status===leadFilter;
+  });
+  // orden por Call date
+  const val=x=>{if(!x)return null;const v=new Date(x).getTime();return isNaN(v)?null:v;};
+  rows.sort((a,b)=>{const va=val(a.call_date),vb=val(b.call_date);
+    if(va===null&&vb===null)return 0; if(va===null)return 1; if(vb===null)return -1;
+    return leadSort==='asc'?va-vb:vb-va;});
+  document.getElementById('lcArrow').textContent=leadSort==='asc'?'▲':'▼';
+
   const body=document.getElementById('leadRows');
   if(!all.length){body.innerHTML='<tr><td colspan="4" class="empty">Aún no hay leads. Pulsa <b>↻ Sincronizar Close</b> para traerlos.</td></tr>';}
-  else if(!rows.length){body.innerHTML='<tr><td colspan="4" class="empty">Sin leads con ese estado.</td></tr>';}
+  else if(!rows.length){body.innerHTML='<tr><td colspan="4" class="empty">Sin leads en esta categoría.</td></tr>';}
   else body.innerHTML=rows.map(l=>`<tr>
     <td class="cell"><b>${esc(l.name||l.company||'—')}</b>${l.company&&l.name?` · <span style="color:var(--t3)">${esc(l.company)}</span>`:''}</td>
     <td class="cell">${l.email?`<a href="mailto:${esc(l.email)}" style="color:var(--accent);text-decoration:none">${esc(l.email)}</a>`:'—'}</td>
     <td><span class="pill ${pillClass(l.status)}">${esc(l.status||'—')}</span></td>
     <td>${fmtDate(l.call_date)}</td></tr>`).join('');
   document.getElementById('leadMeta').textContent=DB.leadsMeta?`${all.length} leads · ${DB.leadsMeta.from} → ${DB.leadsMeta.to} · sinc. ${new Date(DB.leadsMeta.at).toLocaleString('es-ES')}`:'Aún no sincronizado';
-  const won=all.filter(l=>pillClass(l.status)==='win').length, set=all.filter(l=>pillClass(l.status)==='set').length, ns=all.filter(l=>pillClass(l.status)==='noshow').length;
-  const lk=[{l:'Total leads',v:all.length,c:'c-purple'},{l:'Agendados',v:set,c:'c-teal'},{l:'No show',v:ns,c:'c-yellow'},{l:'Cierres',v:won,c:'c-green'}];
-  document.getElementById('leadKpis').innerHTML=lk.map(x=>`<div class="kpi ${x.c}"><div class="kpi-lbl">${x.l}</div><div class="kpi-val">${x.v}</div></div>`).join('');
+
+  // tarjetas: Total (100%) + cada bucket en % sobre el total. Clic = filtra la lista.
+  const counts={}; for(const k in LBUCKETS)counts[k]=0;
+  all.forEach(l=>{const b=bucketOf(l.status); if(b)counts[b]++;});
+  const pctOf=n=>total?Math.round(n/total*100):0;
+  let cards=`<div class="kpi c-purple ${leadFilter==='ALL'?'kactive':''}" data-bucket="ALL" style="cursor:pointer">
+    <div class="kpi-lbl">Total leads</div><div class="kpi-val">${total}</div><div class="kpi-sub">100%</div></div>`;
+  for(const k in LBUCKETS){const B=LBUCKETS[k];
+    cards+=`<div class="kpi ${B.c} ${leadFilter===k?'kactive':''}" data-bucket="${k}" style="cursor:pointer">
+      <div class="kpi-lbl">${B.label}</div><div class="kpi-val">${pctOf(counts[k])}%</div><div class="kpi-sub">${counts[k]} leads</div></div>`;
+  }
+  document.getElementById('leadKpis').innerHTML=cards;
+  document.querySelectorAll('#leadKpis .kpi').forEach(el=>el.onclick=()=>{
+    const b=el.dataset.bucket;
+    leadFilter=(b==='ALL')?'ALL':(leadFilter===b?'ALL':b);
+    renderLeads();
+  });
 }
 async function syncClose(){
   const from=document.getElementById('lFrom').value, to=document.getElementById('lTo').value;
@@ -530,6 +568,7 @@ document.getElementById('todayBtn').onclick=()=>{const n=new Date();cur=new Date
 document.getElementById('clearBtn').onclick=()=>{const r=windowRange();if(confirm('¿Borrar los datos de las semanas en el rango mostrado?')){weeksIn(r.from,r.to).forEach(w=>delete DB.weeks[w.key]);save();render();}};
 document.getElementById('syncBtn').onclick=syncClose;
 document.getElementById('lStatus').onchange=e=>{leadFilter=e.target.value;renderLeads();};
+document.getElementById('lhCall').onclick=()=>{leadSort=leadSort==='asc'?'desc':'asc';renderLeads();};
 document.getElementById('exportBtn').onclick=()=>{const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='lathos-vsl.json';a.click();};
 document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
 document.getElementById('importFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();
