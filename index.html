@@ -245,6 +245,42 @@ select{background:var(--bg2);border:1px solid var(--border2);color:#0f1220;paddi
   </div>
 </div>
 
+<!-- ===== MODAL: ventas de un creativo ===== -->
+<style>
+.vmodal-bg{position:fixed;inset:0;background:rgba(15,18,32,.55);display:none;align-items:center;justify-content:center;z-index:9999;padding:20px}
+.vmodal-bg.open{display:flex}
+.vmodal{background:var(--bg2);border:1px solid var(--border);border-radius:12px;max-width:960px;width:100%;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(0,0,0,.35)}
+.vmodal-head{display:flex;align-items:flex-start;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);gap:12px}
+.vmodal-title{font-size:15px;font-weight:700;color:var(--t1)}
+.vmodal-sub{font-size:12px;color:var(--t3);margin-top:5px;line-height:1.5}
+.vmodal-x{background:var(--bg3);border:1px solid var(--border2);border-radius:6px;width:30px;height:30px;min-width:30px;cursor:pointer;font-size:14px;color:var(--t2)}
+.vmodal-x:hover{background:var(--bg4)}
+.vmodal-body{padding:14px 20px 20px;overflow:auto}
+tr.vrefund td{text-decoration:line-through;opacity:.55}
+.badge-r{background:#fde2e2;color:var(--red);border-radius:4px;padding:2px 7px;font-size:11px;font-weight:600}
+.badge-ok{background:#e2f3e9;color:var(--green);border-radius:4px;padding:2px 7px;font-size:11px;font-weight:600}
+tr.crow{cursor:pointer}
+tr.crow:hover td{background:var(--bg3)}
+</style>
+<div id="vModal" class="vmodal-bg">
+  <div class="vmodal">
+    <div class="vmodal-head">
+      <div><div class="vmodal-title" id="vmTitle">Ventas del creativo</div><div class="vmodal-sub" id="vmSub"></div></div>
+      <button class="vmodal-x" id="vmClose">✕</button>
+    </div>
+    <div class="vmodal-body">
+      <div class="tbl-wrap">
+        <table class="tbl leads" style="min-width:760px">
+          <thead><tr>
+            <th>Fecha venta</th><th>Lead</th><th>Email</th><th>Oferta</th><th>Pago</th><th>Origen</th><th>Revenue</th><th>Cash</th><th>Estado</th>
+          </tr></thead>
+          <tbody id="vmRows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const KEY='lathos_vsl';
 const INPUTS=['adspend','impr','reach','clicks','leads','mql','llamadas'];
@@ -574,15 +610,39 @@ function renderCrea(){
   crs.sort((a,b)=>sortKey==='cancel'?(a.cancel||0)-(b.cancel||0):(b[sortKey]||0)-(a[sortKey]||0));
   const body=document.getElementById('creaRows');
   if(!crs.length){body.innerHTML='<tr><td colspan="10" class="empty">Sin leads. Sincroniza en <b>Leads de Close</b>.</td></tr>';return;}
-  body.innerHTML=crs.map(o=>{const cl=classify(o,medL,minL,B);return `<tr>
+  body.innerHTML=crs.map(o=>{const cl=classify(o,medL,minL,B);return `<tr class="crow" data-crea="${esc(o.creative)}">
     <td class="cell"><b>${esc(o.creative)}</b></td>
     <td>${num0(o.leads)}</td><td>${num0(o.cancels)}</td><td>${pct(o.cancel,0)}</td>
     <td>${num0(o.shows)}</td><td>${pct(o.show,0)}</td><td>${num0(o.ventas)}</td><td>${pct(o.close,0)}</td><td>${eur(o.cash)}</td>
     <td><span class="pill ${cl.cls}">${cl.lab}</span></td></tr>`;}).join('');
+  document.querySelectorAll('#creaRows .crow').forEach(tr=>tr.onclick=()=>openCreaModal(tr.dataset.crea));
 }
 document.getElementById('minAg').oninput=renderCrea;
 document.getElementById('showObj').oninput=renderCrea;
 document.getElementById('creaSort').onchange=renderCrea;
+
+/* ---------- modal: ventas de un creativo ---------- */
+function fdate(s){if(!s)return '—';const d=new Date(s);return isNaN(d)?esc(s):d.toLocaleDateString('es-ES');}
+function openCreaModal(crea){
+  const list=(DB.ventas||[]).filter(v=>(((v.utm||'').trim())||'(sin creativo)')===crea)
+    .sort((a,b)=>String(a.fecha||'').localeCompare(String(b.fecha||'')));
+  let cashOK=0,cashRef=0,rev=0,nRef=0;
+  list.forEach(v=>{const c=+v.cash||0;rev+=(+v.revenue||0);if((v.refund||'')==='yes'){cashRef+=c;nRef++;}else{cashOK+=c;}});
+  const rows=list.map(v=>{const r=(v.refund||'')==='yes';return `<tr class="${r?'vrefund':''}">
+    <td>${fdate(v.fecha)}</td><td><b>${esc(v.nombre||'—')}</b></td><td style="color:var(--t3)">${esc(v.email||'—')}</td>
+    <td>${esc(v.offer||'—')}</td><td>${esc(v.tipo_pago||'—')}</td><td>${esc(v.source||'—')}</td>
+    <td>${eur(+v.revenue||0)}</td><td>${eur(+v.cash||0)}</td>
+    <td>${r?'<span class="badge-r">Reembolso</span>':'<span class="badge-ok">OK</span>'}</td></tr>`;}).join('');
+  document.getElementById('vmRows').innerHTML=rows||'<tr><td colspan="9" class="empty">Sin ventas de este creativo en el rango mostrado.</td></tr>';
+  document.getElementById('vmTitle').textContent=crea;
+  document.getElementById('vmSub').innerHTML=`${list.length} operación(es) en el rango · <b>Cash cobrado: ${eur(cashOK)}</b>`
+    +(nRef?` · ${nRef} reembolso(s) por ${eur(cashRef)} <span style="color:var(--red)">(no suman)</span>`:'')
+    +` · Revenue total: ${eur(rev)}<br><span style="color:var(--t3)">El cash cobrado coincide con la columna Cash de la tabla. Cada fila es un pago real; \u201cVentas\u201d en la tabla cuenta cierres por Call date, por eso no es lo mismo que el nº de pagos.</span>`;
+  document.getElementById('vModal').classList.add('open');
+}
+document.getElementById('vmClose').onclick=()=>document.getElementById('vModal').classList.remove('open');
+document.getElementById('vModal').onclick=(e)=>{if(e.target.id==='vModal')document.getElementById('vModal').classList.remove('open');};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('vModal').classList.remove('open');});
 
 /* ---------- tabs + controles ---------- */
 function showTab(t){curTab=t;
