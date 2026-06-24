@@ -189,7 +189,7 @@ select{background:var(--bg2);border:1px solid var(--border2);color:#0f1220;paddi
       </div>
       <div class="tbl-wrap">
         <table class="tbl leads">
-          <thead><tr><th>Lead / Empresa</th><th>Estado</th><th>Call date</th></tr></thead>
+          <thead><tr><th>Lead / Empresa</th><th>Email</th><th>Estado</th><th>Call date</th></tr></thead>
           <tbody id="leadRows"></tbody>
         </table>
       </div>
@@ -399,10 +399,11 @@ function renderLeads(){
   sel.value=(statuses.includes(prev)||prev==='ALL')?prev:'ALL';leadFilter=sel.value;
   const rows=all.filter(l=>leadFilter==='ALL'||l.status===leadFilter);
   const body=document.getElementById('leadRows');
-  if(!all.length){body.innerHTML='<tr><td colspan="3" class="empty">Aún no hay leads. Pulsa <b>↻ Sincronizar Close</b> para traerlos.</td></tr>';}
-  else if(!rows.length){body.innerHTML='<tr><td colspan="3" class="empty">Sin leads con ese estado.</td></tr>';}
+  if(!all.length){body.innerHTML='<tr><td colspan="4" class="empty">Aún no hay leads. Pulsa <b>↻ Sincronizar Close</b> para traerlos.</td></tr>';}
+  else if(!rows.length){body.innerHTML='<tr><td colspan="4" class="empty">Sin leads con ese estado.</td></tr>';}
   else body.innerHTML=rows.map(l=>`<tr>
     <td class="cell"><b>${esc(l.name||l.company||'—')}</b>${l.company&&l.name?` · <span style="color:var(--t3)">${esc(l.company)}</span>`:''}</td>
+    <td class="cell">${l.email?`<a href="mailto:${esc(l.email)}" style="color:var(--accent);text-decoration:none">${esc(l.email)}</a>`:'—'}</td>
     <td><span class="pill ${pillClass(l.status)}">${esc(l.status||'—')}</span></td>
     <td>${fmtDate(l.call_date)}</td></tr>`).join('');
   document.getElementById('leadMeta').textContent=DB.leadsMeta?`${all.length} leads · ${DB.leadsMeta.from} → ${DB.leadsMeta.to} · sinc. ${new Date(DB.leadsMeta.at).toLocaleString('es-ES')}`:'Aún no sincronizado';
@@ -422,6 +423,7 @@ async function syncClose(){
     const raw=data.leads||(data.det&&data.det.vsl)||[];
     DB.leads=(Array.isArray(raw)?raw:[]).map(l=>({
       name:l.name||l.lead_name||l.display_name||l.contact||'',
+      email:l.email||l.lead_email||'',
       company:l.company||l.organization||l.lead||'',
       status:l.status||l.lead_status||l.status_label||'',
       call_date:l.call_date||l.date||l.call||'',

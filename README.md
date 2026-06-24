@@ -68,7 +68,9 @@ El orden recomendado es: **Supabase → datos de Close → GitHub → Vercel**. 
    | `CLOSE_FIELD_CREATIVE` | `cf_...` del utm_term |
    | `SUPABASE_URL` | URL del proyecto Supabase |
    | `SUPABASE_SERVICE_ROLE_KEY` | service_role de Supabase |
-   | `CLOSE_LEAD_QUERY` | (opcional) filtro extra, p.ej. para limitar a VSL |
+   | `CLOSE_FIELD_SOURCE` | `cf_...` del campo Source |
+   | `CLOSE_SOURCE_VALUE` | `VSL` (solo trae leads con Source = VSL) |
+   | `CLOSE_LEAD_QUERY` | (opcional) filtro extra |
 
 5. **Deploy**. En ~1 min te da una URL (`https://lathos-vsl-xxx.vercel.app`).
 
