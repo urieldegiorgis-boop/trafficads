@@ -246,7 +246,7 @@ const LBUCKETS={
   reserva:{label:'Nueva reserva', re:/nueva|reserva|new\b/i,            c:'c-blue'},
   cancel: {label:'Cancel',        re:/cancel/i,                          c:'c-pink'},
   noshow: {label:'No show',       re:/no.?show/i,                        c:'c-yellow'},
-  cierre: {label:'Cierre',        re:/cierre|won|close the deal|deal|ganad|client|cobr|venta/i, c:'c-green'}
+  cierre: {label:'Cierre',        re:/cierre|won|close the deal|deal|ganad|client|cobr|venta|split\s*pay|split|dep[oó]sito|deposit/i, c:'c-green'}
 };
 function bucketOf(st){const s=st||''; for(const k in LBUCKETS){if(LBUCKETS[k].re.test(s))return k;} return null;}
 
@@ -394,7 +394,7 @@ function refreshKpis(cm){const t=curTot(cm),dt=deriv(t),v=document.querySelector
 
 /* ---------- LEADS (Close) ---------- */
 function pillClass(st){const s=(st||'').toLowerCase();
-  if(/won|cierr|close the deal|ganad|client/.test(s))return 'win';
+  if(/won|cierr|close the deal|ganad|client|split\s*pay|split|dep[oó]sito|deposit/.test(s))return 'win';
   if(/lost|perd|bad fit|cancel/.test(s))return 'lost';
   if(/no.?show|noshow/.test(s))return 'noshow';
   if(/agend|set|reserv|book|call/.test(s))return 'set';
