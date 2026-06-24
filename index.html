@@ -51,12 +51,12 @@ select{background:var(--bg2);border:1px solid var(--border2);color:#0f1220;paddi
 .kpi{border-radius:16px;padding:16px 14px;text-align:center;border:1.5px solid;transition:transform .15s}
 .kpi:hover{transform:translateY(-2px)}
 .kpi.kactive{box-shadow:0 0 0 3px var(--accent);transform:translateY(-2px)}
-.cashbar{display:flex;flex-wrap:wrap;gap:10px;background:#1e2845;border-radius:12px;padding:14px 18px;align-items:center}
-.cashbar .cb{display:flex;flex-direction:column;gap:2px;padding-right:18px;border-right:1px solid #3a4060}
+.cashbar{display:flex;flex-wrap:wrap;gap:10px;background:#1e2845;border-radius:12px;padding:14px 18px;align-items:stretch}
+.cashbar .cb{flex:1 1 0;min-width:150px;display:flex;flex-direction:column;gap:3px;padding:2px 16px;border-right:1px solid #3a4060;align-items:center;text-align:center;justify-content:center}
 .cashbar .cb:last-child{border-right:none}
 .cashbar .cb-l{font-size:10px;color:#aeb6d8;text-transform:uppercase;letter-spacing:.6px;font-weight:700}
-.cashbar .cb-v{font-size:20px;font-weight:800;color:#fff;line-height:1}
-.cashbar .cb-v.green{color:#86e0a8}.cashbar .cb-v.amber{color:#f0cd7a}
+.cashbar .cb-v{font-size:20px;font-weight:800;color:#fff;line-height:1.1}
+.cashbar .cb-v.green{color:#86e0a8}.cashbar .cb-v.amber{color:#f0cd7a}.cashbar .cb-v.blue{color:#9db8ff}
 .cashbar .cb-s{font-size:10px;color:#8b93b8}
 .kpi.c-purple{background:#e7def5;border-color:#cbb8ec}
 .kpi.c-green{background:#cfeed9;border-color:#a4dab6}
@@ -558,12 +558,13 @@ function cashSplit(){
 function renderCashBar(adspend){
   const el=document.getElementById('cashBar');if(!el)return;
   if(!DB.ventas||!DB.ventas.length){el.innerHTML='';return;}
-  const c=cashSplit(),roi=adspend>0?(c.periodo/adspend):NaN;
+  const c=cashSplit(),roas=adspend>0?(c.periodo/adspend):NaN,roi=adspend>0?(c.periodo/adspend-1):NaN;
   el.innerHTML=`<div class="cashbar">
     <div class="cb"><div class="cb-l">Cash total del periodo</div><div class="cb-v">${eur(c.total)}</div><div class="cb-s">${c.nVen} ventas (cobrado en el rango)</div></div>
     <div class="cb"><div class="cb-l">Agendadas en el periodo</div><div class="cb-v green">${eur(c.periodo)}</div><div class="cb-s">la llamada cayó en este rango</div></div>
-    <div class="cb"><div class="cb-l">Arrastre (agendadas antes)</div><div class="cb-v amber">${eur(c.arrastre)}</div><div class="cb-s">cobrado ahora, agenda de otro mes</div></div>
-    <div class="cb"><div class="cb-l">ROI agendas del periodo</div><div class="cb-v">${isFinite(roi)?Math.round(roi*100)+'%':'—'}</div><div class="cb-s">cash agendas ÷ adspend</div></div>
+    <div class="cb"><div class="cb-l">Arrastre (agendadas antes)</div><div class="cb-v amber">${eur(c.arrastre)}</div><div class="cb-s">cobrado ahora, agenda de otro mes u otra fuente</div></div>
+    <div class="cb"><div class="cb-l">ROAS agendas del periodo</div><div class="cb-v blue">${isFinite(roas)?roas.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})+'x':'—'}</div><div class="cb-s">cash agendas ÷ adspend</div></div>
+    <div class="cb"><div class="cb-l">ROI agendas del periodo</div><div class="cb-v">${isFinite(roi)?Math.round(roi*100)+'%':'—'}</div><div class="cb-s">(cash agendas − adspend) ÷ adspend</div></div>
   </div>`;
 }
 
