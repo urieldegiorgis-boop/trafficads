@@ -15,6 +15,8 @@ export default async function handler(req, res) {
   // IDs de campos personalizados (Settings → Custom Fields, o GET /custom_field/lead/). Empiezan por "cf_".
   const CF_CALL = process.env.CLOSE_FIELD_CALL_DATE || ""; // campo "Call date" (fecha de la llamada agendada)
   const CF_CREA = process.env.CLOSE_FIELD_CREATIVE  || ""; // campo "Creativo / Ad / ángulo"
+  const CF_SRC  = process.env.CLOSE_FIELD_SOURCE    || ""; // campo "Source"
+  const SRC_VAL = process.env.CLOSE_SOURCE_VALUE    || "VSL"; // valor de Source que se queda (p.ej. "VSL")
   const EXTRA   = process.env.CLOSE_LEAD_QUERY       || ""; // filtro extra opcional (p.ej. limitar a leads de VSL)
   // Se filtra el rango por el Call date si está configurado; si no, por la fecha de creación del lead.
   const dateField = CF_CALL ? `custom.${CF_CALL}` : "date_created";
@@ -41,14 +43,17 @@ export default async function handler(req, res) {
       const json = await r.json();
       for (const lead of (json.data || [])) {
         const contact = (lead.contacts && lead.contacts[0]) || {};
+        const email = (contact.emails && contact.emails[0] && contact.emails[0].email) || "";
         leads.push({
           id: lead.id,
           name: contact.name || "",
+          email: email,
           company: lead.display_name || "",
           status: lead.status_label || "",
           created: lead.date_created || "",
           call_date: CF_CALL ? (lead["custom." + CF_CALL] || "") : "",
-          creative:  CF_CREA ? (lead["custom." + CF_CREA] || "") : ""
+          creative:  CF_CREA ? (lead["custom." + CF_CREA] || "") : "",
+          source:    CF_SRC  ? (lead["custom." + CF_SRC]  || "") : ""
         });
       }
       if (!json.has_more) break;
@@ -59,11 +64,17 @@ export default async function handler(req, res) {
     let out = leads;
     if (CF_CALL) {
       const lo = from, hi = to; // 'YYYY-MM-DD'
-      out = leads.filter(l => {
+      out = out.filter(l => {
         if (!l.call_date) return false;
         const d = String(l.call_date).slice(0, 10); // normaliza a YYYY-MM-DD
         return d >= lo && d <= hi;
       });
+    }
+
+    // Solo leads cuyo Source coincide (p.ej. "VSL").
+    if (CF_SRC) {
+      const want = SRC_VAL.trim().toLowerCase();
+      out = out.filter(l => String(l.source || "").trim().toLowerCase() === want);
     }
 
     res.setHeader("Cache-Control", "no-store");
