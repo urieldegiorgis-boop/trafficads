@@ -142,7 +142,6 @@ select{background:var(--bg2);border:1px solid var(--border2);color:#0f1220;paddi
     <div class="barcard">
       <div class="seg" id="modeSeg">
         <button data-m="month">Mensual</button>
-        <button data-m="custom">Personalizado</button>
       </div>
       <div class="mnav" id="monthCtl">
         <button id="prevM">‹</button><div class="mlabel" id="mLabel"></div><button id="nextM">›</button>
@@ -153,6 +152,7 @@ select{background:var(--bg2);border:1px solid var(--border2);color:#0f1220;paddi
         <button class="btn btn-primary" id="applyC">Aplicar</button>
       </div>
       <div class="spacer">
+        <button class="btn btn-primary" id="syncBtnM">↻ Actualizar</button>
         <button class="btn btn-ghost" id="todayBtn">Mes actual</button>
         <button class="btn btn-ghost" id="clearBtn">Limpiar</button>
       </div>
@@ -507,11 +507,11 @@ function renderLeads(){
     renderLeads();
   });
 }
-async function syncClose(){
+async function syncClose(btnEl){
   const from=document.getElementById('lFrom').value, to=document.getElementById('lTo').value;
   if(!from||!to){alert('Elige las fechas Desde y Hasta.');return;}
   if(from>to){alert('La fecha Desde es posterior a Hasta.');return;}
-  const btn=document.getElementById('syncBtn');const prev=btn.textContent;btn.textContent='Sincronizando…';btn.disabled=true;
+  const btn=(btnEl&&btnEl.tagName)?btnEl:document.getElementById('syncBtn');const prev=btn.textContent;btn.textContent='Sincronizando…';btn.disabled=true;
   try{
     const r=await fetch('/api/close?from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to)+'&view=leads');
     if(!r.ok)throw new Error('HTTP '+r.status);
@@ -546,12 +546,15 @@ function cashSplit(){
   const b=rangeBounds(),emails=new Set();
   (DB.leads||[]).forEach(l=>{if(!l.email)return;const d=new Date(l.call_date);
     if(!isNaN(d)&&d>=b.lo&&d<=b.hi)emails.add(l.email.trim().toLowerCase());});
-  const o={periodo:0,arrastre:0,total:0,nVen:0};
+  const o={periodo:0,arrastre:0,total:0,nVen:0,vsl:0,otras:0,canalOk:false};
   (DB.ventas||[]).forEach(v=>{
     if((v.refund||'')==='yes')return;
     const cash=+v.cash||0;o.total+=cash;o.nVen++;
     const em=(v.email||'').trim().toLowerCase();
     if(em&&emails.has(em))o.periodo+=cash; else o.arrastre+=cash;
+    const canal=(v.acqchannel||v.acq_channel||v.acq||v.canal||v.channel||'').toString().trim();
+    if(canal)o.canalOk=true;
+    if(canal.toUpperCase()==='VSL')o.vsl+=cash; else o.otras+=cash;
   });
   return o;
 }
@@ -562,7 +565,8 @@ function renderCashBar(adspend){
   el.innerHTML=`<div class="cashbar">
     <div class="cb"><div class="cb-l">Cash total del periodo</div><div class="cb-v">${eur(c.total)}</div><div class="cb-s">${c.nVen} ventas (cobrado en el rango)</div></div>
     <div class="cb"><div class="cb-l">Agendadas en el periodo</div><div class="cb-v green">${eur(c.periodo)}</div><div class="cb-s">la llamada cayó en este rango</div></div>
-    <div class="cb"><div class="cb-l">Arrastre (agendadas antes)</div><div class="cb-v amber">${eur(c.arrastre)}</div><div class="cb-s">cobrado ahora, agenda de otro mes u otra fuente</div></div>
+    <div class="cb"><div class="cb-l">VSL total</div><div class="cb-v">${c.canalOk?eur(c.vsl):'—'}</div><div class="cb-s">${c.canalOk?'canal de adquisición = VSL':'falta el campo acqchannel en /api/ventas'}</div></div>
+    <div class="cb"><div class="cb-l">Otras fuentes</div><div class="cb-v">${c.canalOk?eur(c.otras):'—'}</div><div class="cb-s">${c.canalOk?'resto de canales (no VSL)':'falta el campo acqchannel en /api/ventas'}</div></div>
     <div class="cb"><div class="cb-l">ROAS agendas del periodo</div><div class="cb-v blue">${isFinite(roas)?roas.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})+'x':'—'}</div><div class="cb-s">cash agendas ÷ adspend</div></div>
     <div class="cb"><div class="cb-l">ROI agendas del periodo</div><div class="cb-v">${isFinite(roi)?Math.round(roi*100)+'%':'—'}</div><div class="cb-s">(cash agendas − adspend) ÷ adspend</div></div>
   </div>`;
@@ -671,7 +675,8 @@ document.getElementById('prevM').onclick=()=>{cur=new Date(cur.getFullYear(),cur
 document.getElementById('nextM').onclick=()=>{cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);render();};
 document.getElementById('todayBtn').onclick=()=>{const n=new Date();cur=new Date(n.getFullYear(),n.getMonth(),1);render();};
 document.getElementById('clearBtn').onclick=()=>{const r=windowRange();if(confirm('¿Borrar los datos de las semanas en el rango mostrado?')){weeksIn(r.from,r.to).forEach(w=>delete DB.weeks[w.key]);save();render();}};
-document.getElementById('syncBtn').onclick=syncClose;
+document.getElementById('syncBtn').onclick=function(){syncClose(this);};
+document.getElementById('syncBtnM').onclick=function(){var r=windowRange();document.getElementById('lFrom').value=iso(r.from);document.getElementById('lTo').value=iso(r.to);syncClose(this);};
 document.getElementById('lStatus').onchange=e=>{leadFilter=e.target.value;renderLeads();};
 document.getElementById('lhCall').onclick=()=>{leadSort=leadSort==='asc'?'desc':'asc';renderLeads();};
 document.getElementById('exportBtn').onclick=()=>{const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='lathos-vsl.json';a.click();};
@@ -682,7 +687,7 @@ document.getElementById('importFile').onchange=e=>{const f=e.target.files[0];if(
 /* ---------- init ---------- */
 (async function(){
   const saved=await load();if(saved)DB=saved;
-  DB.weeks=DB.weeks||{};DB.leads=DB.leads||[];DB.ventas=DB.ventas||[];if(DB.callsAuto===undefined)DB.callsAuto=true;DB.view=DB.view||{mode:'month',from:null,to:null};
+  DB.weeks=DB.weeks||{};DB.leads=DB.leads||[];DB.ventas=DB.ventas||[];if(DB.callsAuto===undefined)DB.callsAuto=true;DB.view=DB.view||{mode:'month',from:null,to:null};if(DB.view.mode==='custom')DB.view.mode='month';
   booting=false;
   const n=new Date(),mi=monthId(n),lastDay=String(new Date(n.getFullYear(),n.getMonth()+1,0).getDate()).padStart(2,'0');
   document.getElementById('lFrom').value=mi+'-01';document.getElementById('lTo').value=mi+'-'+lastDay;
